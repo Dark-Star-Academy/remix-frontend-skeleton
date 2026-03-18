@@ -1,0 +1,10 @@
+# build
+build
+dist
+.react-router
+
+# dependencies
+node_modules
+
+# generated
+*.min.js

@@ -1,3 +1,5 @@
+import { Button } from "~/components/ui/button";
+
 /**
  * RUTA HIJA del layout _auth
  *
@@ -75,20 +77,9 @@ export default function AuthLogin() {
             }}
           />
         </div>
-        <button
-          type="button"
-          style={{
-            padding: "0.75rem",
-            background: "#1a1a2e",
-            color: "white",
-            border: "none",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontWeight: "bold",
-          }}
-        >
+        <Button type="submit" size="lg" variant="destructive">
           Entrar
-        </button>
+        </Button>
       </form>
     </div>
   );
