@@ -11,3 +11,7 @@
 
 # Cursor
 .cursor/
+
+# CLAUDE 
+.claude/
+CLAUDE.md
