@@ -37,7 +37,7 @@ export async function action({ request }: Route.ActionArgs) {
     return { error: "Credenciales inválidas." };
   }
 
-  const response = await apiFetch("/auth/login", {
+  const response = await apiFetch("/api/auth/login", {
     method: "POST",
     headers: buildAuthForwardHeaders(request, "/login", "ADMIN"),
     body: JSON.stringify({ email, password }),
