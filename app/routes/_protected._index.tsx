@@ -9,7 +9,7 @@ export default function ProtectedIndexRoute() {
       <header className="space-y-2">
         <h1 className="text-3xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground">
-          Bienvenido{user.name ? `, ${user.name}` : ""}. Esta ruta está protegida
+          Bienvenido{user.firstName ? `, ${user.firstName}` : ""}. Esta ruta está protegida
           desde el loader del servidor.
         </p>
       </header>
@@ -17,13 +17,19 @@ export default function ProtectedIndexRoute() {
       <div className="border rounded-xl p-5 space-y-2">
         <p className="text-sm text-muted-foreground">Datos de sesión actuales</p>
         <p>
-          <strong>ID:</strong> {user.id}
+          <strong>ID:</strong> {user.userId}
+        </p>
+        <p>
+          <strong>Nombre:</strong> {user.firstName} {user.lastName}
         </p>
         <p>
           <strong>Email:</strong> {user.email}
         </p>
         <p>
-          <strong>Rol:</strong> {user.role ?? "Sin rol"}
+          <strong>Rol:</strong> {user.role}
+        </p>
+        <p>
+          <strong>Estado:</strong> {user.status}
         </p>
       </div>
 

@@ -1,87 +1,112 @@
 import { Form, Link, redirect } from "react-router";
 import type { Route } from "./+types/_auth.register";
 import {
+  commitSession,
+  getSession,
+  normalizeSessionUser,
+} from "~/lib/auth.server";
+import {
   apiFetch,
   buildAuthForwardHeaders,
+  extractCookieValue,
   extractUserFromAuthPayload,
+  getSetCookieHeaders,
 } from "~/lib/api.server";
-import { commitSession, getSession, type SessionUser } from "~/lib/auth.server";
+import { isApiErrorResponse } from "~/lib/api-error";
 
-function normalizeUser(candidate: Record<string, unknown>): SessionUser | null {
-  const rawId = candidate.id;
-  const rawEmail = candidate.email;
-  const rawName = candidate.name;
-  const rawRole = candidate.role;
-
-  if (
-    (typeof rawId !== "string" && typeof rawId !== "number") ||
-    typeof rawEmail !== "string"
-  ) {
-    return null;
+function sanitizeRedirectTo(value: FormDataEntryValue | string | null) {
+  if (typeof value !== "string" || !value.startsWith("/")) {
+    return "/";
   }
+  return value;
+}
 
-  return {
-    id: String(rawId),
-    email: rawEmail,
-    name: typeof rawName === "string" ? rawName : undefined,
-    role: typeof rawRole === "string" ? rawRole : undefined,
-  };
+export async function loader({ request }: Route.LoaderArgs) {
+  const url = new URL(request.url);
+  const redirectTo = sanitizeRedirectTo(url.searchParams.get("redirectTo"));
+  return { redirectTo };
 }
 
 export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
-  const name = formData.get("name");
+  const firstName = formData.get("firstName");
+  const lastName = formData.get("lastName");
   const email = formData.get("email");
   const password = formData.get("password");
+  const redirectTo = sanitizeRedirectTo(formData.get("redirectTo"));
 
   if (
-    typeof name !== "string" ||
+    typeof firstName !== "string" ||
+    typeof lastName !== "string" ||
     typeof email !== "string" ||
     typeof password !== "string"
   ) {
     return { error: "Datos de registro inválidos." };
   }
 
-  const response = await apiFetch("/auth/register", {
+  // Step 1: Register the user (returns flat user object, no auth tokens).
+  const registerResponse = await apiFetch("/auth/register", {
     method: "POST",
-    headers: buildAuthForwardHeaders(request, "/register", "ADMIN"),
-    body: JSON.stringify({ name, email, password }),
+    headers: buildAuthForwardHeaders(request, "/register", "CUSTOMER"),
+    body: JSON.stringify({ firstName, lastName, email, password }),
   });
 
-  if (!response.ok) {
+  if (!registerResponse.ok) {
     let errorMessage = "No fue posible crear la cuenta.";
     try {
-      const payload = (await response.json()) as { message?: string };
-      if (payload.message) {
-        errorMessage = payload.message;
+      const parsed: unknown = await registerResponse.json();
+      if (isApiErrorResponse(parsed)) {
+        errorMessage = parsed.message;
       }
     } catch {
       // Ignore parse errors and use default message.
     }
-
     return { error: errorMessage };
   }
 
-  const payload = (await response.json()) as unknown;
+  // Step 2: Auto-login with the same credentials to obtain auth tokens.
+  // The register endpoint does not issue cookies — a login call is required.
+  const loginResponse = await apiFetch("/auth/login", {
+    method: "POST",
+    headers: buildAuthForwardHeaders(request, "/login", "CUSTOMER"),
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!loginResponse.ok) {
+    // Registration succeeded but auto-login failed — redirect to login.
+    return redirect("/login");
+  }
+
+  const payload = (await loginResponse.json()) as unknown;
   const userCandidate = extractUserFromAuthPayload(payload);
-  const user = userCandidate ? normalizeUser(userCandidate) : null;
+  const user = userCandidate ? normalizeSessionUser(userCandidate) : null;
 
   if (!user) {
-    // Si no devuelve usuario, redirigimos al login para autenticación manual.
+    return redirect("/login");
+  }
+
+  const setCookies = getSetCookieHeaders(loginResponse);
+  const accessToken = extractCookieValue(setCookies, "access_token");
+  const refreshToken = extractCookieValue(setCookies, "refresh_token");
+
+  if (!accessToken || !refreshToken) {
     return redirect("/login");
   }
 
   const session = await getSession(request.headers.get("Cookie"));
   session.set("user", user);
+  session.set("accessToken", accessToken);
+  session.set("refreshToken", refreshToken);
 
-  return redirect("/", {
-    headers: {
-      "Set-Cookie": await commitSession(session),
-    },
+  return redirect(redirectTo, {
+    headers: { "Set-Cookie": await commitSession(session) },
   });
 }
 
-export default function RegisterRoute({ actionData }: Route.ComponentProps) {
+export default function RegisterRoute({
+  actionData,
+  loaderData,
+}: Route.ComponentProps) {
   return (
     <div className="space-y-6">
       <header className="space-y-1">
@@ -98,13 +123,26 @@ export default function RegisterRoute({ actionData }: Route.ComponentProps) {
       ) : null}
 
       <Form method="post" className="space-y-4">
+        <input type="hidden" name="redirectTo" value={loaderData.redirectTo} />
+
         <label className="block space-y-1">
           <span className="text-sm font-medium">Nombre</span>
           <input
             required
             type="text"
-            name="name"
-            autoComplete="name"
+            name="firstName"
+            autoComplete="given-name"
+            className="w-full border rounded-md px-3 py-2 bg-background"
+          />
+        </label>
+
+        <label className="block space-y-1">
+          <span className="text-sm font-medium">Apellido</span>
+          <input
+            required
+            type="text"
+            name="lastName"
+            autoComplete="family-name"
             className="w-full border rounded-md px-3 py-2 bg-background"
           />
         </label>

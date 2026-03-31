@@ -11,7 +11,7 @@
 // ErrorBoundary más cercano (definido en root.tsx).
 
 import { Link } from "react-router";
-import type { Route } from "./+types/users.$id";
+import type { Route } from "./+types/_protected.users.$id";
 import { getUserById } from "~/lib/mock-users";
 
 export async function loader({ params }: Route.LoaderArgs) {
